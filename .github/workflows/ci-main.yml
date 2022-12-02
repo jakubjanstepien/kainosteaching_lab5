@@ -1,0 +1,42 @@
+name: CI - Main Branch Workflow
+on:
+  push:
+    branches:
+    - main
+defaults:
+  run:
+    shell: pwsh
+env:
+  ci_pipeline: true
+  INSTANCE: ci
+  GIT_ARM_CLIENT_ID: ${{ secrets.GIT_ARM_CLIENT_ID }}
+  GIT_ARM_CLIENT_SECRET: ${{ secrets.GIT_ARM_CLIENT_SECRET }}
+  GIT_ARM_TENANT_ID: ${{ secrets.GIT_ARM_TENANT_ID }}
+  GIT_ARM_SUBSCRIPTION_ID: ${{ secrets.GIT_ARM_SUBSCRIPTION_ID }}
+jobs:
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set version and tag
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v5.6
+        with:
+          github_token: ${{ secrets.GH_TOKEN }}
+          tag_prefix: "" # Remove any prefix to ensure compatibility for all build types
+      - name: Set calculated env vars
+        run: |
+          echo "RELEASE_VERSION=$(echo "${{ steps.tag_version.outputs.new_tag }}")" >> $GITHUB_ENV
+        shell: bash
+      - name: build.ps1 init
+        run: ./build.ps1 init ${{ steps.tag_version.outputs.new_tag }} ci
+      - name: build.ps1 compose
+        run: ./build.ps1 compose ${{ steps.tag_version.outputs.new_tag }} ci
+      - name: build.ps1 publish
+        run: ./build.ps1 publish ${{ steps.tag_version.outputs.new_tag }} ci
+      - name: Create GitHub release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.tag_version.outputs.new_tag }}
+          name: Release ${{ steps.tag_version.outputs.new_tag }}
+          body: ${{ steps.tag_version.outputs.changelog }}

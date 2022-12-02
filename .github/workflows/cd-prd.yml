@@ -1,0 +1,48 @@
+name: CD - Deploy prd instance
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "The git ref to be provisioned, use tags created after main build (default: the newest release)"
+        required: false
+        type: string
+defaults:
+  run:
+    shell: pwsh
+env:
+  ci_pipeline: true
+  INSTANCE: prd
+  GIT_ARM_CLIENT_ID: ${{ secrets.GIT_ARM_CLIENT_ID }}
+  GIT_ARM_CLIENT_SECRET: ${{ secrets.GIT_ARM_CLIENT_SECRET }}
+  GIT_ARM_TENANT_ID: ${{ secrets.GIT_ARM_TENANT_ID }}
+  GIT_ARM_SUBSCRIPTION_ID: ${{ secrets.GIT_ARM_SUBSCRIPTION_ID }}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Custom get latest tag"
+        uses: oprypin/find-latest-tag@v1
+        id: latest_tag
+        with:
+          repository: ${{ github.repository }}
+          regex: '^\d+\.\d+\.\d+$' # Only match main builds
+      - name: "Calculate release version"
+        id: release_version
+        run: |
+          if [${{ github.event.inputs.release_tag }} == ""]; then
+            echo "::set-output name=deploy_tag::${{ steps.latest_tag.outputs.tag }}"
+          else
+            echo "::set-output name=deploy_tag::${{ github.event.inputs.release_tag }}"
+          fi
+        shell: bash
+      - name: Set calculated env vars
+        run: |
+          echo "RELEASE_VERSION=$(echo "${{ steps.release_version.outputs.deploy_tag }}")" >> $GITHUB_ENV
+        shell: bash
+      - uses: actions/checkout@v2
+        with:
+          ref: ${{ steps.release_version.outputs.deploy_tag }}
+      - name: build.ps1 init
+        run: ./build.ps1 init ${{ steps.release_version.outputs.deploy_tag }} prd
+      - name: build.ps1 deploy
+        run: ./build.ps1 deploy ${{ steps.release_version.outputs.deploy_tag }} prd

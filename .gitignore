@@ -1,0 +1,5 @@
+BuildOutput
+.terraform*
+inputs.auto.tfvars
+*.tfstate
+*.tfstate.backup
